@@ -87,7 +87,7 @@ Respond with ONLY the JSON, no markdown formatting."""
 
 st.markdown("""
 <style>
-.block-container { padding-top: 1rem; padding-bottom: 0; max-width: 700px; }
+.block-container { padding-top: 3rem; padding-bottom: 0; max-width: 700px; }
 .mode-toggle { text-align: center; margin-bottom: 0.5rem; }
 .prompt-box {
     background: #1a1a2e; border: 2px solid #e94560;
