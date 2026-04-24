@@ -2,23 +2,20 @@
 English Speaking Practice App
 - Two modes: Ophthalmology English / Daily & Childcare English
 - Web Speech API for STT (continuous, trigger-word stop) and TTS
-- Gemini API for cleansing + feedback
+- Groq API (Llama) for cleansing + feedback
 """
 
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 import json
 
 st.set_page_config(page_title="English Speaking Practice", layout="centered")
 
-# ─── Gemini Setup ───────────────────────────────────────────
+# ─── Groq Setup ─────────────────────────────────────────────
 
-GEMINI_API_KEY = st.secrets.get("gemini_api_key", "")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash-lite")
-else:
-    model = None
+GROQ_API_KEY = st.secrets.get("groq_api_key", "")
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+MODEL = "llama-3.3-70b-versatile"
 
 # ─── Mode & State ───────────────────────────────────────────
 
@@ -125,32 +122,33 @@ st.markdown("""
 
 # ─── Helper Functions ───────────────────────────────────────
 
-def generate_prompt(mode):
-    if not model:
-        return "Gemini API key not set. Add gemini_api_key to Streamlit secrets."
-    sys_prompt = SYSTEM_PROMPT_OPHTH if mode == "ophthalmology" else SYSTEM_PROMPT_DAILY
+def _chat(message):
+    if not client:
+        return "API key not set. Add groq_api_key to Streamlit secrets."
     try:
-        response = model.generate_content(sys_prompt)
-        return response.text.strip()
+        resp = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": message}],
+            temperature=0.7,
+        )
+        return resp.choices[0].message.content.strip()
     except Exception as e:
         return f"Error: {e}"
 
+def generate_prompt(mode):
+    sys_prompt = SYSTEM_PROMPT_OPHTH if mode == "ophthalmology" else SYSTEM_PROMPT_DAILY
+    return _chat(sys_prompt)
+
 def cleanse_speech(raw_text, prompt):
-    if not model:
-        return raw_text
-    try:
-        filled = CLEANSE_PROMPT.format(prompt=prompt, raw_text=raw_text)
-        response = model.generate_content(filled)
-        return response.text.strip()
-    except Exception:
-        return raw_text
+    filled = CLEANSE_PROMPT.format(prompt=prompt, raw_text=raw_text)
+    result = _chat(filled)
+    return result if not result.startswith("Error") else raw_text
 
 def get_feedback(cleaned, prompt):
-    if not model:
-        return None
     filled = FEEDBACK_PROMPT.format(prompt=prompt, cleaned=cleaned)
-    response = model.generate_content(filled)
-    text = response.text.strip()
+    text = _chat(filled)
+    if text.startswith("Error"):
+        return None
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0]
     try:
