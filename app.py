@@ -6,6 +6,7 @@ English Speaking Practice App
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 from groq import Groq
 import json
 
@@ -239,8 +240,8 @@ if st.session_state.current_prompt and st.session_state.step in ("prompt_shown",
                 "Say <b>\"That's it\"</b>, <b>\"That's all\"</b>, or <b>\"Finished\"</b> to stop.</p>",
                 unsafe_allow_html=True)
 
-    # Web Speech API component
-    st.html("""
+    # Web Speech API — runs in parent window via st.markdown (not iframe)
+    st.markdown("""
     <div id="speech-area" style="text-align:center;">
         <button id="mic-btn" onclick="toggleMic()" style="
             width: 80px; height: 80px; border-radius: 50%;
@@ -255,7 +256,11 @@ if st.session_state.current_prompt and st.session_state.step in ("prompt_shown",
             margin:10px 0;min-height:60px;color:#dfe6e9;
             font-size:1rem;text-align:left;white-space:pre-wrap;
         "></div>
-        <input type="hidden" id="final-result" />
+        <button id="submit-btn" onclick="submitResult()" style="
+            display:none; background:#0984e3; color:#fff; border:none;
+            border-radius:8px; padding:10px 24px; font-size:1rem;
+            cursor:pointer; margin:8px;
+        ">Submit</button>
     </div>
 
     <script>
@@ -263,23 +268,24 @@ if st.session_state.current_prompt and st.session_state.step in ("prompt_shown",
     var isListening = false;
     var fullTranscript = '';
     var interimText = '';
-    var STOP_TRIGGERS = ["that's it", "that's all", "finished", "done", "owari", "おわり", "終わり"];
+    var STOP_TRIGGERS = ["that's it", "that's all", "finished", "done"];
 
     function toggleMic() {
         if (isListening) {
             stopListening();
+            document.getElementById('submit-btn').style.display = 'inline-block';
         } else {
             startListening();
         }
     }
 
     function startListening() {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            document.getElementById('status').textContent = 'Speech recognition not supported in this browser.';
+        var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) {
+            document.getElementById('status').textContent = 'Speech recognition not supported. Use Chrome.';
             return;
         }
-        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new SpeechRecognition();
+        recognition = new SR();
         recognition.lang = 'en-US';
         recognition.continuous = true;
         recognition.interimResults = true;
@@ -288,29 +294,31 @@ if st.session_state.current_prompt and st.session_state.step in ("prompt_shown",
             isListening = true;
             document.getElementById('mic-btn').style.background = '#d63031';
             document.getElementById('mic-btn').style.boxShadow = '0 0 20px rgba(214,48,49,0.6)';
-            document.getElementById('status').textContent = 'Listening... (say "That\\'s it" to finish)';
+            document.getElementById('mic-btn').textContent = '⏹';
+            document.getElementById('status').textContent = 'Listening... tap again to stop';
+            document.getElementById('submit-btn').style.display = 'none';
             fullTranscript = '';
         };
 
         recognition.onresult = function(event) {
             interimText = '';
             for (var i = event.resultIndex; i < event.results.length; i++) {
-                var transcript = event.results[i][0].transcript;
+                var t = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    fullTranscript += transcript + ' ';
-                    // Check stop triggers
-                    var lower = transcript.toLowerCase().trim();
+                    var lower = t.toLowerCase().trim();
+                    var triggered = false;
                     for (var j = 0; j < STOP_TRIGGERS.length; j++) {
                         if (lower.includes(STOP_TRIGGERS[j])) {
-                            // Remove trigger word from transcript
                             fullTranscript = fullTranscript.replace(new RegExp(STOP_TRIGGERS[j], 'gi'), '').trim();
                             stopListening();
                             submitResult();
-                            return;
+                            triggered = true;
+                            break;
                         }
                     }
+                    if (!triggered) fullTranscript += t + ' ';
                 } else {
-                    interimText += transcript;
+                    interimText += t;
                 }
             }
             document.getElementById('live-text').innerHTML =
@@ -319,48 +327,42 @@ if st.session_state.current_prompt and st.session_state.step in ("prompt_shown",
         };
 
         recognition.onerror = function(event) {
-            if (event.error === 'no-speech') {
-                // Ignore no-speech errors - user is thinking
-                return;
-            }
+            if (event.error === 'no-speech') return;
             document.getElementById('status').textContent = 'Error: ' + event.error;
         };
 
         recognition.onend = function() {
-            // Auto-restart if user didn't explicitly stop (continuous listening)
             if (isListening) {
                 try { recognition.start(); } catch(e) {}
             }
         };
 
-        try {
-            recognition.start();
-        } catch(e) {
-            document.getElementById('status').textContent = 'Error starting: ' + e.message;
+        try { recognition.start(); } catch(e) {
+            document.getElementById('status').textContent = 'Error: ' + e.message;
         }
     }
 
     function stopListening() {
         isListening = false;
-        if (recognition) {
-            recognition.abort();
-        }
+        if (recognition) recognition.abort();
         document.getElementById('mic-btn').style.background = '#e17055';
         document.getElementById('mic-btn').style.boxShadow = '0 4px 15px rgba(225,112,85,0.4)';
-        document.getElementById('status').textContent = 'Stopped';
+        document.getElementById('mic-btn').textContent = '🎤';
+        document.getElementById('status').textContent = 'Stopped — tap Submit or record again';
+        document.getElementById('submit-btn').style.display = 'inline-block';
     }
 
     function submitResult() {
         var text = fullTranscript.trim();
         if (!text) return;
         document.getElementById('status').textContent = 'Submitting...';
-        // Send to Streamlit via query param
-        var url = new URL(window.parent.location);
+        document.getElementById('submit-btn').style.display = 'none';
+        var url = new URL(window.location);
         url.searchParams.set('speech_result', encodeURIComponent(text));
-        window.parent.location.href = url.toString();
+        window.location.href = url.toString();
     }
     </script>
-    """)
+    """, unsafe_allow_html=True)
 
     # Manual text input fallback
     with st.expander("Type instead"):
