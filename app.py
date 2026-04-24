@@ -16,7 +16,7 @@ st.set_page_config(page_title="English Speaking Practice", layout="centered")
 GEMINI_API_KEY = st.secrets.get("gemini_api_key", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-1.5-flash")
 else:
     model = None
 
@@ -129,15 +129,21 @@ def generate_prompt(mode):
     if not model:
         return "Gemini API key not set. Add gemini_api_key to Streamlit secrets."
     sys_prompt = SYSTEM_PROMPT_OPHTH if mode == "ophthalmology" else SYSTEM_PROMPT_DAILY
-    response = model.generate_content(sys_prompt)
-    return response.text.strip()
+    try:
+        response = model.generate_content(sys_prompt)
+        return response.text.strip()
+    except Exception as e:
+        return f"Error: {e}"
 
 def cleanse_speech(raw_text, prompt):
     if not model:
         return raw_text
-    filled = CLEANSE_PROMPT.format(prompt=prompt, raw_text=raw_text)
-    response = model.generate_content(filled)
-    return response.text.strip()
+    try:
+        filled = CLEANSE_PROMPT.format(prompt=prompt, raw_text=raw_text)
+        response = model.generate_content(filled)
+        return response.text.strip()
+    except Exception:
+        return raw_text
 
 def get_feedback(cleaned, prompt):
     if not model:
