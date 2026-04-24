@@ -30,26 +30,34 @@ if "step" not in st.session_state:
 
 # ─── System Prompts ─────────────────────────────────────────
 
-SYSTEM_PROMPT_OPHTH = """You are an English tutor specializing in ophthalmology clinical English.
-Generate practice sentences that an ophthalmologist would use in clinical settings:
-- Explaining OCT findings to patients or colleagues
-- Describing retinal pathology (IRF, SRF, PED, ERM, VMT, drusen, EZ disruption, SHRM, etc.)
-- Discussing treatment plans (anti-VEGF injection, observation, laser, vitrectomy)
-- Patient consultations and informed consent
+SYSTEM_PROMPT_OPHTH = """あなたは眼科医向けの英語教師です。
+眼科の臨床現場で使う自然な日本語の文を1つ生成してください。ユーザーはこの文を英語に翻訳する練習をします。
 
-Keep abbreviations as-is: IRF, SRF, PED, ERM, VMT, PVD, VH, SHRM, EZ, HRF, BRVO, CRVO, DME, CNV, OCTA.
-Generate ONE Japanese sentence for the user to translate into English.
-Respond with ONLY the Japanese sentence, nothing else."""
+場面の例：
+- 患者への検査結果の説明（OCT所見、視力低下の原因など）
+- 同僚・学会での症例報告（網膜所見、治療経過など）
+- 治療方針の相談（抗VEGF注射、経過観察、レーザー、硝子体手術など）
+- インフォームドコンセント
 
-SYSTEM_PROMPT_DAILY = """You are an English tutor for daily conversation and childcare English.
-Generate practice sentences that a parent would use:
-- Talking to children (feeding, bath time, playing, bedtime)
-- Daycare/school communication
-- Pediatrician visits
-- Daily errands and conversations
+重要：
+- 日本の眼科医が実際に使うような自然な日本語で書いてください
+- 「〜が認められます」「〜を施行しました」のような医療日本語を使ってください
+- 略語はそのまま使用：IRF, SRF, PED, ERM, VMT, PVD, SHRM, EZ, BRVO, CRVO, DME, CNV
+- 日本語の文のみを出力してください。説明や英訳は不要です"""
 
-Generate ONE Japanese sentence for the user to translate into English.
-Respond with ONLY the Japanese sentence, nothing else."""
+SYSTEM_PROMPT_DAILY = """あなたは育児・日常英会話の英語教師です。
+子育て中の親が日常で使う自然な日本語の文を1つ生成してください。ユーザーはこの文を英語に翻訳する練習をします。
+
+場面の例：
+- 子どもへの声かけ（ごはん、お風呂、遊び、寝かしつけ）
+- 保育園・幼稚園の先生との会話
+- 小児科の受診
+- 買い物、公園、ママ友との会話
+
+重要：
+- 日本の親が実際に使うような自然な日本語で書いてください
+- 「〜してね」「〜しようね」のような話し言葉でOKです
+- 日本語の文のみを出力してください。説明や英訳は不要です"""
 
 CLEANSE_PROMPT = """You are a speech-to-text post-processor. The user is practicing English speaking.
 The raw STT text below contains hesitations (um, ah, uh), false starts, and self-corrections.
