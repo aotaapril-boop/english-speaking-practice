@@ -16,7 +16,7 @@ st.set_page_config(page_title="English Speaking Practice", layout="centered")
 GEMINI_API_KEY = st.secrets.get("gemini_api_key", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash-lite")
 else:
     model = None
 
