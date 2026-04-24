@@ -81,12 +81,20 @@ FEEDBACK_PROMPT = """You are an English tutor. The user tried to translate this 
 Japanese original: {prompt}
 User's English (cleaned): {cleaned}
 
+Important:
+- Check prepositions (in/on/at/to/for/with etc.) carefully — these are the English equivalent of Japanese particles
+- Check article usage (a/an/the) carefully
+- Check verb tense consistency
+- The "explanation" field MUST be written in natural Japanese (日本語ネイティブが読んで違和感のない日本語で書くこと)
+- Use correct Japanese particles (助詞) in the explanation — 「に/で/を/へ/が/は」等を正確に使うこと
+- Do NOT write unnatural machine-translated Japanese in the explanation
+
 Provide feedback in this exact JSON format:
 {{
   "grammar_score": <1-5>,
   "natural_score": <1-5>,
   "corrections": "<corrected version of user's sentence, or 'Perfect!' if no issues>",
-  "explanation": "<brief explanation in Japanese of any grammar/usage issues>",
+  "explanation": "<日本語で文法・用法の問題点を簡潔に説明。自然な日本語で書くこと>",
   "better_expression": "<a more natural/professional way to say it>",
   "model_answer": "<your ideal translation of the Japanese>"
 }}
