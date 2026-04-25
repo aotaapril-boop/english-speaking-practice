@@ -9,6 +9,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from groq import Groq
 import json
+import random
 
 st.set_page_config(page_title="English Speaking Practice", layout="centered")
 
@@ -31,31 +32,38 @@ if "step" not in st.session_state:
 
 # ─── System Prompts ─────────────────────────────────────────
 
-SYSTEM_PROMPT_OPHTH = """あなたは眼科医向けの英語教師です。
-眼科の臨床現場で使う自然な日本語の文を1つ生成してください。ユーザーはこの文を英語に翻訳する練習をします。
+OPHTH_TOPICS = [
+    ("網膜・硝子体", "OCT所見の説明、抗VEGF注射、硝子体手術、網膜剥離、糖尿病網膜症、加齢黄斑変性、IRF/SRF/PED/ERM"),
+    ("角膜", "角膜潰瘍、角膜移植（DSAEK/DMEK）、円錐角膜、角膜内皮細胞、ドライアイ、コンタクトレンズ合併症"),
+    ("結膜", "アレルギー性結膜炎、翼状片、結膜弛緩症、ウイルス性結膜炎（アデノウイルス）"),
+    ("緑内障", "眼圧測定、視野検査（ハンフリー/ゴールドマン）、点眼指導、SLT/ALT、濾過手術、MIGS、視神経乳頭陥凹"),
+    ("神経眼科", "視神経炎、うっ血乳頭、外転神経麻痺、瞳孔不同、RAPD、巨細胞性動脈炎、視野障害"),
+    ("ぶどう膜炎", "前部ぶどう膜炎、サルコイドーシス、ベーチェット病、原田病、CMV網膜炎、免疫抑制剤"),
+    ("白内障", "術前説明、IOL選択（単焦点/多焦点/トーリック）、術後合併症（PCO、CME）、phaco"),
+    ("眼形成・涙道", "眼瞼下垂、涙道閉塞、DCR、眼窩骨折、甲状腺眼症、眼瞼痙攣"),
+    ("小児眼科・斜視", "弱視訓練、斜視手術、ROP（未熟児網膜症）、先天白内障、遮閉法"),
+]
 
-場面の例（さまざまな眼科領域から出題してください）：
-- 網膜・硝子体：OCT所見の説明、抗VEGF注射、硝子体手術、網膜剥離、糖尿病網膜症、加齢黄斑変性
-- 角膜：角膜潰瘍、角膜移植（DSAEK/DMEK）、円錐角膜、角膜内皮細胞、ドライアイ、コンタクトレンズ合併症
-- 結膜：アレルギー性結膜炎、翼状片、結膜弛緩症、ウイルス性結膜炎（アデノウイルス）
-- 緑内障：眼圧測定、視野検査（ハンフリー/ゴールドマン）、点眼指導、SLT/ALT、濾過手術、MIGS
-- 神経眼科：視神経炎、うっ血乳頭、外転神経麻痺、瞳孔不同、RAPD、巨細胞性動脈炎
-- ぶどう膜炎：前部ぶどう膜炎、サルコイドーシス、ベーチェット病、原田病、CMV網膜炎
-- 白内障：術前説明、IOL選択（単焦点/多焦点/トーリック）、術後合併症（PCO、CME）
-- 眼形成・涙道：眼瞼下垂、涙道閉塞、DCR、眼窩骨折、甲状腺眼症
-- 小児眼科・斜視：弱視訓練、斜視手術、ROP（未熟児網膜症）、先天白内障
+def _ophth_prompt():
+    topic_name, topic_detail = random.choice(OPHTH_TOPICS)
+    return f"""あなたは眼科医向けの英語教師です。
+今回は【{topic_name}】の領域から、眼科の臨床現場で使う自然な日本語の文を1つ生成してください。
+ユーザーはこの文を英語に翻訳する練習をします。
+
+【{topic_name}】のキーワード例：{topic_detail}
+
+場面の例：
 - 患者への検査結果の説明
 - 同僚・学会での症例報告
 - 治療方針の相談・インフォームドコンセント
 
 重要：
-- 上記の領域からバランスよく、毎回異なる領域の文を出題してください
+- 必ず【{topic_name}】の領域に関する文を出してください（他の領域は不可）
 - 日本の眼科医が実際に使うような自然な日本語で書いてください
 - 「〜が認められます」「〜を施行しました」のような医療日本語を使ってください
 - 助詞（に/で/を/へ等）を正しく使い、文法的に正確な文にしてください
 - 不自然な直訳調や、意味が通らない文は絶対に出力しないでください
 - 出力前に、日本語ネイティブが読んで違和感がないか必ず確認してください
-- 略語はそのまま使用：IRF, SRF, PED, ERM, VMT, PVD, SHRM, EZ, BRVO, CRVO, DME, CNV, IOL, PCO, CME, DSAEK, DMEK, SLT, MIGS, RAPD, ROP, DCR
 - 日本語の文のみを出力してください。説明や英訳は不要です"""
 
 SYSTEM_PROMPT_DAILY = """あなたは育児・日常英会話の英語教師です。
@@ -167,7 +175,7 @@ def _chat(message):
         return f"Error: {e}"
 
 def generate_prompt(mode):
-    sys_prompt = SYSTEM_PROMPT_OPHTH if mode == "ophthalmology" else SYSTEM_PROMPT_DAILY
+    sys_prompt = _ophth_prompt() if mode == "ophthalmology" else SYSTEM_PROMPT_DAILY
     return _chat(sys_prompt)
 
 def cleanse_speech(raw_text, prompt):
@@ -245,153 +253,116 @@ if st.session_state.current_prompt:
 
 if st.session_state.current_prompt and st.session_state.step in ("prompt_shown", "waiting_speech"):
     st.markdown("### Speak your English translation")
-    st.markdown("<p style='color:#b2bec3;font-size:0.85rem;'>Press the mic button and speak. "
-                "Say <b>\"That's it\"</b>, <b>\"That's all\"</b>, or <b>\"Finished\"</b> to stop.</p>",
+    st.markdown("<p style='color:#b2bec3;font-size:0.85rem;'>Tap the mic, speak in English, then tap Stop and Submit. "
+                "Or type below.</p>",
                 unsafe_allow_html=True)
 
-    # Web Speech API — runs in parent window via st.markdown (not iframe)
-    st.markdown("""
+    speech_html = """
     <div id="speech-area" style="text-align:center;">
         <button id="mic-btn" onclick="toggleMic()" style="
-            width: 80px; height: 80px; border-radius: 50%;
-            background: #e17055; color: white; border: none;
-            font-size: 2rem; cursor: pointer; margin: 10px;
-            box-shadow: 0 4px 15px rgba(225,112,85,0.4);
-            transition: all 0.3s;
-        ">🎤</button>
+            width:80px;height:80px;border-radius:50%;
+            background:#e17055;color:white;border:none;
+            font-size:2rem;cursor:pointer;margin:10px;
+            box-shadow:0 4px 15px rgba(225,112,85,0.4);
+        ">&#x1F3A4;</button>
         <div id="status" style="color:#b2bec3;font-size:0.85rem;margin:5px;">Tap to start</div>
         <div id="live-text" style="
             background:#2d3436;border-radius:8px;padding:12px;
-            margin:10px 0;min-height:60px;color:#dfe6e9;
-            font-size:1rem;text-align:left;white-space:pre-wrap;
+            margin:10px 0;min-height:50px;color:#dfe6e9;
+            font-size:1rem;text-align:left;
         "></div>
-        <button id="submit-btn" onclick="submitResult()" style="
-            display:none; background:#0984e3; color:#fff; border:none;
-            border-radius:8px; padding:10px 24px; font-size:1rem;
-            cursor:pointer; margin:8px;
+        <button id="submit-btn" onclick="submitToStreamlit()" style="
+            display:none;background:#0984e3;color:#fff;border:none;
+            border-radius:8px;padding:10px 24px;font-size:1rem;
+            cursor:pointer;margin:8px;
         ">Submit</button>
     </div>
-
     <script>
-    var recognition = null;
-    var isListening = false;
-    var fullTranscript = '';
-    var interimText = '';
-    var STOP_TRIGGERS = ["that's it", "that's all", "finished", "done"];
-
-    function toggleMic() {
-        if (isListening) {
-            stopListening();
-            document.getElementById('submit-btn').style.display = 'inline-block';
-        } else {
-            startListening();
+    var recognition=null, isListening=false, fullTranscript='', interimText='';
+    function toggleMic(){
+        if(isListening){stopListening();}else{startListening();}
+    }
+    function startListening(){
+        var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+        if(!SR){document.getElementById('status').textContent='Not supported. Use Chrome.';return;}
+        recognition=new SR();
+        recognition.lang='en-US';recognition.continuous=true;recognition.interimResults=true;
+        recognition.onstart=function(){
+            isListening=true;fullTranscript='';
+            document.getElementById('mic-btn').style.background='#d63031';
+            document.getElementById('mic-btn').innerHTML='&#x23F9;';
+            document.getElementById('status').textContent='Listening...';
+            document.getElementById('submit-btn').style.display='none';
+        };
+        recognition.onresult=function(e){
+            interimText='';
+            for(var i=e.resultIndex;i<e.results.length;i++){
+                var t=e.results[i][0].transcript;
+                if(e.results[i].isFinal){fullTranscript+=t+' ';}
+                else{interimText+=t;}
+            }
+            document.getElementById('live-text').innerHTML=
+                '<span style="color:#55efc4;">'+fullTranscript+'</span>'+
+                '<span style="color:#636e72;">'+interimText+'</span>';
+        };
+        recognition.onerror=function(e){
+            if(e.error==='no-speech')return;
+            document.getElementById('status').textContent='Error: '+e.error;
+        };
+        recognition.onend=function(){
+            if(isListening){try{recognition.start();}catch(ex){}}
+        };
+        try{recognition.start();}catch(ex){
+            document.getElementById('status').textContent='Error: '+ex.message;
         }
     }
-
-    function startListening() {
-        var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SR) {
-            document.getElementById('status').textContent = 'Speech recognition not supported. Use Chrome.';
-            return;
+    function stopListening(){
+        isListening=false;
+        if(recognition)recognition.stop();
+        document.getElementById('mic-btn').style.background='#e17055';
+        document.getElementById('mic-btn').innerHTML='&#x1F3A4;';
+        document.getElementById('status').textContent='Tap Submit to send';
+        document.getElementById('submit-btn').style.display='inline-block';
+    }
+    function submitToStreamlit(){
+        var text=fullTranscript.trim();
+        if(!text)return;
+        document.getElementById('status').textContent='Submitting...';
+        document.getElementById('submit-btn').style.display='none';
+        // Write result into Streamlit's text_area widget
+        var textareas=window.parent.document.querySelectorAll('textarea');
+        for(var i=0;i<textareas.length;i++){
+            if(textareas[i].getAttribute('aria-label')==='speech_result'){
+                var nativeSetter=Object.getOwnPropertyDescriptor(
+                    window.HTMLTextAreaElement.prototype,'value').set;
+                nativeSetter.call(textareas[i],text);
+                textareas[i].dispatchEvent(new Event('input',{bubbles:true}));
+                break;
+            }
         }
-        recognition = new SR();
-        recognition.lang = 'en-US';
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
-        recognition.onstart = function() {
-            isListening = true;
-            document.getElementById('mic-btn').style.background = '#d63031';
-            document.getElementById('mic-btn').style.boxShadow = '0 0 20px rgba(214,48,49,0.6)';
-            document.getElementById('mic-btn').textContent = '⏹';
-            document.getElementById('status').textContent = 'Listening... tap again to stop';
-            document.getElementById('submit-btn').style.display = 'none';
-            fullTranscript = '';
-        };
-
-        recognition.onresult = function(event) {
-            interimText = '';
-            for (var i = event.resultIndex; i < event.results.length; i++) {
-                var t = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    var lower = t.toLowerCase().trim();
-                    var triggered = false;
-                    for (var j = 0; j < STOP_TRIGGERS.length; j++) {
-                        if (lower.includes(STOP_TRIGGERS[j])) {
-                            fullTranscript = fullTranscript.replace(new RegExp(STOP_TRIGGERS[j], 'gi'), '').trim();
-                            stopListening();
-                            submitResult();
-                            triggered = true;
-                            break;
-                        }
-                    }
-                    if (!triggered) fullTranscript += t + ' ';
-                } else {
-                    interimText += t;
+        // Click the submit button
+        setTimeout(function(){
+            var buttons=window.parent.document.querySelectorAll('button');
+            for(var i=0;i<buttons.length;i++){
+                if(buttons[i].textContent.trim()==='Send'){
+                    buttons[i].click();break;
                 }
             }
-            document.getElementById('live-text').innerHTML =
-                '<span style="color:#55efc4;">' + fullTranscript + '</span>' +
-                '<span style="color:#636e72;">' + interimText + '</span>';
-        };
-
-        recognition.onerror = function(event) {
-            if (event.error === 'no-speech') return;
-            document.getElementById('status').textContent = 'Error: ' + event.error;
-        };
-
-        recognition.onend = function() {
-            if (isListening) {
-                try { recognition.start(); } catch(e) {}
-            }
-        };
-
-        try { recognition.start(); } catch(e) {
-            document.getElementById('status').textContent = 'Error: ' + e.message;
-        }
-    }
-
-    function stopListening() {
-        isListening = false;
-        if (recognition) recognition.abort();
-        document.getElementById('mic-btn').style.background = '#e17055';
-        document.getElementById('mic-btn').style.boxShadow = '0 4px 15px rgba(225,112,85,0.4)';
-        document.getElementById('mic-btn').textContent = '🎤';
-        document.getElementById('status').textContent = 'Stopped — tap Submit or record again';
-        document.getElementById('submit-btn').style.display = 'inline-block';
-    }
-
-    function submitResult() {
-        var text = fullTranscript.trim();
-        if (!text) return;
-        document.getElementById('status').textContent = 'Submitting...';
-        document.getElementById('submit-btn').style.display = 'none';
-        var url = new URL(window.location);
-        url.searchParams.set('speech_result', encodeURIComponent(text));
-        window.location.href = url.toString();
+        },300);
     }
     </script>
-    """, unsafe_allow_html=True)
+    """
+    components.html(speech_html, height=250)
 
-    # Manual text input fallback
-    with st.expander("Type instead"):
-        manual = st.text_area("Your English:", key="manual_input", height=80)
-        if st.button("Submit text"):
-            if manual.strip():
-                st.session_state.raw_speech = manual.strip()
-                st.session_state.step = "processing"
-                st.rerun()
-
-# ─── Process speech result from URL param ───────────────────
-
-query_params = st.query_params
-if "speech_result" in query_params:
-    import urllib.parse
-    raw = urllib.parse.unquote(query_params["speech_result"])
-    st.session_state.raw_speech = raw
-    st.session_state.step = "processing"
-    st.query_params.clear()
-    st.rerun()
+    # Text input (also receives speech result via JS injection)
+    user_input = st.text_area("Your English:", key="speech_result", height=80,
+                              label_visibility="collapsed",
+                              placeholder="Type or use mic above...")
+    if st.button("Send", use_container_width=True):
+        if user_input.strip():
+            st.session_state.raw_speech = user_input.strip()
+            st.session_state.step = "processing"
+            st.rerun()
 
 # ─── Processing & Feedback ──────────────────────────────────
 
