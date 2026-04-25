@@ -6,7 +6,6 @@ English Speaking Practice App
 """
 
 import streamlit as st
-import streamlit.components.v1 as components
 import json
 import random
 
@@ -306,103 +305,6 @@ def score_class(score):
     if score >= 3: return "score-ok"
     return "score-bad"
 
-def speech_component(target_label, submit_btn_text="Send"):
-    html = f"""
-    <div id="speech-area" style="text-align:center;">
-        <button id="mic-btn" onclick="toggleMic()" style="
-            width:70px;height:70px;border-radius:50%;
-            background:#e17055;color:white;border:none;
-            font-size:1.8rem;cursor:pointer;margin:8px;
-            box-shadow:0 4px 15px rgba(225,112,85,0.4);
-        ">&#x1F3A4;</button>
-        <div id="status" style="color:#b2bec3;font-size:0.85rem;margin:5px;">Tap to start</div>
-        <div id="live-text" style="
-            background:#2d3436;border-radius:8px;padding:12px;
-            margin:10px 0;min-height:40px;color:#dfe6e9;
-            font-size:1rem;text-align:left;
-        "></div>
-    </div>
-    <script>
-    var recognition=null, isListening=false, fullTranscript='', interimText='';
-    function toggleMic(){{
-        if(isListening){{stopAndSubmit();}}else{{startListening();}}
-    }}
-    function startListening(){{
-        var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-        if(!SR){{document.getElementById('status').textContent='Not supported. Use Chrome.';return;}}
-        recognition=new SR();
-        recognition.lang='en-US';recognition.continuous=true;recognition.interimResults=true;
-        recognition.onstart=function(){{
-            isListening=true;fullTranscript='';
-            document.getElementById('mic-btn').style.background='#d63031';
-            document.getElementById('mic-btn').innerHTML='&#x23F9;';
-            document.getElementById('status').textContent='Listening... tap to stop';
-        }};
-        recognition.onresult=function(e){{
-            interimText='';
-            for(var i=e.resultIndex;i<e.results.length;i++){{
-                var t=e.results[i][0].transcript;
-                if(e.results[i].isFinal){{fullTranscript+=t+' ';}}
-                else{{interimText+=t;}}
-            }}
-            document.getElementById('live-text').innerHTML=
-                '<span style="color:#55efc4;">'+fullTranscript+'</span>'+
-                '<span style="color:#636e72;">'+interimText+'</span>';
-        }};
-        recognition.onerror=function(e){{
-            if(e.error==='no-speech')return;
-            document.getElementById('status').textContent='Error: '+e.error;
-        }};
-        recognition.onend=function(){{
-            if(isListening){{try{{recognition.start();}}catch(ex){{}}}}
-        }};
-        try{{recognition.start();}}catch(ex){{
-            document.getElementById('status').textContent='Error: '+ex.message;
-        }}
-    }}
-    function stopAndSubmit(){{
-        isListening=false;
-        if(recognition)recognition.stop();
-        document.getElementById('mic-btn').style.background='#e17055';
-        document.getElementById('mic-btn').innerHTML='&#x1F3A4;';
-        var text=fullTranscript.trim();
-        if(!text){{
-            document.getElementById('status').textContent='No speech detected. Tap to retry.';
-            return;
-        }}
-        document.getElementById('status').textContent='Sending...';
-        var textareas=window.parent.document.querySelectorAll('textarea');
-        for(var i=0;i<textareas.length;i++){{
-            if(textareas[i].getAttribute('aria-label')==='{target_label}'){{
-                var nativeSetter=Object.getOwnPropertyDescriptor(
-                    window.HTMLTextAreaElement.prototype,'value').set;
-                nativeSetter.call(textareas[i],text);
-                textareas[i].dispatchEvent(new Event('input',{{bubbles:true}}));
-                break;
-            }}
-        }}
-        setTimeout(function(){{
-            var doc=window.parent.document;
-            // Find button by searching for p tags with matching text inside buttons
-            var ps=doc.querySelectorAll('button p');
-            for(var i=0;i<ps.length;i++){{
-                if(ps[i].textContent.trim()==='{submit_btn_text}'){{
-                    ps[i].closest('button').click();
-                    return;
-                }}
-            }}
-            // Fallback: search all buttons by textContent
-            var buttons=doc.querySelectorAll('button');
-            for(var i=0;i<buttons.length;i++){{
-                if(buttons[i].textContent.includes('{submit_btn_text}')){{
-                    buttons[i].click();break;
-                }}
-            }}
-        }},500);
-    }}
-    </script>
-    """
-    components.html(html, height=180)
 
 # ─── UI ─────────────────────────────────────────────────────
 
@@ -475,15 +377,15 @@ if st.session_state.mode in ("ophthalmology", "daily"):
     # ─── Speech Input ──────────────────────────────────────
     if st.session_state.current_prompt and st.session_state.step in ("prompt_shown", "waiting_speech"):
         st.markdown("### Speak your English translation")
-        st.markdown("<p style='color:#b2bec3;font-size:0.85rem;'>Tap the mic, speak in English, then tap Stop and Submit. "
-                    "Or type below.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#b2bec3;font-size:0.85rem;'>"
+                    "Type or use your keyboard's mic icon for voice input. "
+                    "Typos and hesitations will be auto-corrected.</p>",
+                    unsafe_allow_html=True)
 
-        speech_component("speech_result", "Send")
-
-        user_input = st.text_area("Your English:", key="speech_result", height=80,
+        user_input = st.text_area("Your English:", key="speech_result", height=100,
                                   label_visibility="collapsed",
-                                  placeholder="Type or use mic above...")
-        if st.button("Send", use_container_width=True):
+                                  placeholder="Type or voice-input here...")
+        if st.button("Send", use_container_width=True, type="primary"):
             if user_input.strip():
                 st.session_state.raw_speech = user_input.strip()
                 st.session_state.step = "processing"
@@ -656,11 +558,9 @@ if st.session_state.mode in ("ophthalmology", "daily"):
             else:
                 st.markdown(f'<div class="conv-ai">{msg["content"]}</div>', unsafe_allow_html=True)
 
-        speech_component("conv_input", "Send message")
-
-        conv_input = st.text_area("Your message (in English):", key="conv_input", height=60,
+        conv_input = st.text_area("Your message (in English):", key="conv_input", height=80,
                                   label_visibility="collapsed",
-                                  placeholder="Type or use mic above...")
+                                  placeholder="Type or voice-input here...")
         if st.button("Send message", use_container_width=True):
             if conv_input.strip():
                 raw_conv = conv_input.strip()
