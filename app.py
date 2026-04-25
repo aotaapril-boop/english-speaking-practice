@@ -306,6 +306,102 @@ def score_class(score):
     if score >= 3: return "score-ok"
     return "score-bad"
 
+def speech_component(target_label, submit_btn_text="Send"):
+    html = f"""
+    <div id="speech-area" style="text-align:center;">
+        <button id="mic-btn" onclick="toggleMic()" style="
+            width:70px;height:70px;border-radius:50%;
+            background:#e17055;color:white;border:none;
+            font-size:1.8rem;cursor:pointer;margin:8px;
+            box-shadow:0 4px 15px rgba(225,112,85,0.4);
+        ">&#x1F3A4;</button>
+        <div id="status" style="color:#b2bec3;font-size:0.85rem;margin:5px;">Tap to start</div>
+        <div id="live-text" style="
+            background:#2d3436;border-radius:8px;padding:12px;
+            margin:10px 0;min-height:40px;color:#dfe6e9;
+            font-size:1rem;text-align:left;
+        "></div>
+        <button id="submit-btn" onclick="submitToStreamlit()" style="
+            display:none;background:#0984e3;color:#fff;border:none;
+            border-radius:8px;padding:10px 24px;font-size:1rem;
+            cursor:pointer;margin:8px;
+        ">Submit</button>
+    </div>
+    <script>
+    var recognition=null, isListening=false, fullTranscript='', interimText='';
+    function toggleMic(){{
+        if(isListening){{stopListening();}}else{{startListening();}}
+    }}
+    function startListening(){{
+        var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+        if(!SR){{document.getElementById('status').textContent='Not supported. Use Chrome.';return;}}
+        recognition=new SR();
+        recognition.lang='en-US';recognition.continuous=true;recognition.interimResults=true;
+        recognition.onstart=function(){{
+            isListening=true;fullTranscript='';
+            document.getElementById('mic-btn').style.background='#d63031';
+            document.getElementById('mic-btn').innerHTML='&#x23F9;';
+            document.getElementById('status').textContent='Listening...';
+            document.getElementById('submit-btn').style.display='none';
+        }};
+        recognition.onresult=function(e){{
+            interimText='';
+            for(var i=e.resultIndex;i<e.results.length;i++){{
+                var t=e.results[i][0].transcript;
+                if(e.results[i].isFinal){{fullTranscript+=t+' ';}}
+                else{{interimText+=t;}}
+            }}
+            document.getElementById('live-text').innerHTML=
+                '<span style="color:#55efc4;">'+fullTranscript+'</span>'+
+                '<span style="color:#636e72;">'+interimText+'</span>';
+        }};
+        recognition.onerror=function(e){{
+            if(e.error==='no-speech')return;
+            document.getElementById('status').textContent='Error: '+e.error;
+        }};
+        recognition.onend=function(){{
+            if(isListening){{try{{recognition.start();}}catch(ex){{}}}}
+        }};
+        try{{recognition.start();}}catch(ex){{
+            document.getElementById('status').textContent='Error: '+ex.message;
+        }}
+    }}
+    function stopListening(){{
+        isListening=false;
+        if(recognition)recognition.stop();
+        document.getElementById('mic-btn').style.background='#e17055';
+        document.getElementById('mic-btn').innerHTML='&#x1F3A4;';
+        document.getElementById('status').textContent='Tap Submit to send';
+        document.getElementById('submit-btn').style.display='inline-block';
+    }}
+    function submitToStreamlit(){{
+        var text=fullTranscript.trim();
+        if(!text)return;
+        document.getElementById('status').textContent='Submitting...';
+        document.getElementById('submit-btn').style.display='none';
+        var textareas=window.parent.document.querySelectorAll('textarea');
+        for(var i=0;i<textareas.length;i++){{
+            if(textareas[i].getAttribute('aria-label')==='{target_label}'){{
+                var nativeSetter=Object.getOwnPropertyDescriptor(
+                    window.HTMLTextAreaElement.prototype,'value').set;
+                nativeSetter.call(textareas[i],text);
+                textareas[i].dispatchEvent(new Event('input',{{bubbles:true}}));
+                break;
+            }}
+        }}
+        setTimeout(function(){{
+            var buttons=window.parent.document.querySelectorAll('button');
+            for(var i=0;i<buttons.length;i++){{
+                if(buttons[i].textContent.trim()==='{submit_btn_text}'){{
+                    buttons[i].click();break;
+                }}
+            }}
+        }},300);
+    }}
+    </script>
+    """
+    components.html(html, height=220)
+
 # ─── UI ─────────────────────────────────────────────────────
 
 col1, col2, col3 = st.columns(3)
@@ -380,100 +476,7 @@ if st.session_state.mode in ("ophthalmology", "daily"):
         st.markdown("<p style='color:#b2bec3;font-size:0.85rem;'>Tap the mic, speak in English, then tap Stop and Submit. "
                     "Or type below.</p>", unsafe_allow_html=True)
 
-        speech_html = """
-        <div id="speech-area" style="text-align:center;">
-            <button id="mic-btn" onclick="toggleMic()" style="
-                width:80px;height:80px;border-radius:50%;
-                background:#e17055;color:white;border:none;
-                font-size:2rem;cursor:pointer;margin:10px;
-                box-shadow:0 4px 15px rgba(225,112,85,0.4);
-            ">&#x1F3A4;</button>
-            <div id="status" style="color:#b2bec3;font-size:0.85rem;margin:5px;">Tap to start</div>
-            <div id="live-text" style="
-                background:#2d3436;border-radius:8px;padding:12px;
-                margin:10px 0;min-height:50px;color:#dfe6e9;
-                font-size:1rem;text-align:left;
-            "></div>
-            <button id="submit-btn" onclick="submitToStreamlit()" style="
-                display:none;background:#0984e3;color:#fff;border:none;
-                border-radius:8px;padding:10px 24px;font-size:1rem;
-                cursor:pointer;margin:8px;
-            ">Submit</button>
-        </div>
-        <script>
-        var recognition=null, isListening=false, fullTranscript='', interimText='';
-        function toggleMic(){
-            if(isListening){stopListening();}else{startListening();}
-        }
-        function startListening(){
-            var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-            if(!SR){document.getElementById('status').textContent='Not supported. Use Chrome.';return;}
-            recognition=new SR();
-            recognition.lang='en-US';recognition.continuous=true;recognition.interimResults=true;
-            recognition.onstart=function(){
-                isListening=true;fullTranscript='';
-                document.getElementById('mic-btn').style.background='#d63031';
-                document.getElementById('mic-btn').innerHTML='&#x23F9;';
-                document.getElementById('status').textContent='Listening...';
-                document.getElementById('submit-btn').style.display='none';
-            };
-            recognition.onresult=function(e){
-                interimText='';
-                for(var i=e.resultIndex;i<e.results.length;i++){
-                    var t=e.results[i][0].transcript;
-                    if(e.results[i].isFinal){fullTranscript+=t+' ';}
-                    else{interimText+=t;}
-                }
-                document.getElementById('live-text').innerHTML=
-                    '<span style="color:#55efc4;">'+fullTranscript+'</span>'+
-                    '<span style="color:#636e72;">'+interimText+'</span>';
-            };
-            recognition.onerror=function(e){
-                if(e.error==='no-speech')return;
-                document.getElementById('status').textContent='Error: '+e.error;
-            };
-            recognition.onend=function(){
-                if(isListening){try{recognition.start();}catch(ex){}}
-            };
-            try{recognition.start();}catch(ex){
-                document.getElementById('status').textContent='Error: '+ex.message;
-            }
-        }
-        function stopListening(){
-            isListening=false;
-            if(recognition)recognition.stop();
-            document.getElementById('mic-btn').style.background='#e17055';
-            document.getElementById('mic-btn').innerHTML='&#x1F3A4;';
-            document.getElementById('status').textContent='Tap Submit to send';
-            document.getElementById('submit-btn').style.display='inline-block';
-        }
-        function submitToStreamlit(){
-            var text=fullTranscript.trim();
-            if(!text)return;
-            document.getElementById('status').textContent='Submitting...';
-            document.getElementById('submit-btn').style.display='none';
-            var textareas=window.parent.document.querySelectorAll('textarea');
-            for(var i=0;i<textareas.length;i++){
-                if(textareas[i].getAttribute('aria-label')==='speech_result'){
-                    var nativeSetter=Object.getOwnPropertyDescriptor(
-                        window.HTMLTextAreaElement.prototype,'value').set;
-                    nativeSetter.call(textareas[i],text);
-                    textareas[i].dispatchEvent(new Event('input',{bubbles:true}));
-                    break;
-                }
-            }
-            setTimeout(function(){
-                var buttons=window.parent.document.querySelectorAll('button');
-                for(var i=0;i<buttons.length;i++){
-                    if(buttons[i].textContent.trim()==='Send'){
-                        buttons[i].click();break;
-                    }
-                }
-            },300);
-        }
-        </script>
-        """
-        components.html(speech_html, height=250)
+        speech_component("speech_result", "Send")
 
         user_input = st.text_area("Your English:", key="speech_result", height=80,
                                   label_visibility="collapsed",
@@ -651,11 +654,19 @@ if st.session_state.mode in ("ophthalmology", "daily"):
             else:
                 st.markdown(f'<div class="conv-ai">{msg["content"]}</div>', unsafe_allow_html=True)
 
-        conv_input = st.text_input("Your message (in English):", key="conv_input",
-                                   placeholder="Try using the phrases you learned...")
-        if st.button("Send", key="conv_send", use_container_width=True):
+        speech_component("conv_input", "Send message")
+
+        conv_input = st.text_area("Your message (in English):", key="conv_input", height=60,
+                                  label_visibility="collapsed",
+                                  placeholder="Type or use mic above...")
+        if st.button("Send message", use_container_width=True):
             if conv_input.strip():
-                st.session_state.conv_messages.append({"role": "user", "content": conv_input.strip()})
+                raw_conv = conv_input.strip()
+                with st.spinner("Cleaning up..."):
+                    cleaned_conv = _chat(f"Clean up this English speech input. Fix typos, hesitations, and incomplete words. Output ONLY the cleaned sentence:\n{raw_conv}")
+                    if cleaned_conv.startswith("Error"):
+                        cleaned_conv = raw_conv
+                st.session_state.conv_messages.append({"role": "user", "content": cleaned_conv})
 
                 sys_msg = CONVERSATION_SYSTEM.format(
                     topic=st.session_state.current_prompt,
