@@ -135,6 +135,25 @@ Provide feedback in this exact JSON format:
 
 Respond with ONLY the JSON, no markdown formatting."""
 
+LOOKUP_PROMPT = """あなたは日英翻訳の専門家です。以下の日本語表現について、自然な英語表現を教えてください。
+
+入力: {query}
+
+以下の形式で回答してください（日本語で説明）：
+
+**自然な英語表現:**
+最も一般的で自然な英語表現を1つ
+
+**別の言い方:**
+同じ意味の別表現があれば2〜3つ（ニュアンスの違いも簡潔に説明）
+
+**例文:**
+実際の使用例を2〜3文（英語 + 日本語訳）
+医療・眼科の文脈で使える場合はそちらも含める
+
+**注意点:**
+使い分けのポイントや、日本人が間違えやすいポイントがあれば簡潔に"""
+
 # ─── CSS ────────────────────────────────────────────────────
 
 st.markdown("""
@@ -239,8 +258,8 @@ def score_class(score):
 
 # ─── UI ─────────────────────────────────────────────────────
 
-# Mode toggle
-col1, col2 = st.columns(2)
+# Mode toggle (3 modes)
+col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("Ophthalmology", use_container_width=True,
                  type="primary" if st.session_state.mode == "ophthalmology" else "secondary"):
@@ -248,46 +267,53 @@ with col1:
         st.session_state.step = "idle"
         st.rerun()
 with col2:
-    if st.button("Daily & Childcare", use_container_width=True,
+    if st.button("Daily", use_container_width=True,
                  type="primary" if st.session_state.mode == "daily" else "secondary"):
         st.session_state.mode = "daily"
         st.session_state.step = "idle"
         st.rerun()
+with col3:
+    if st.button("Lookup", use_container_width=True,
+                 type="primary" if st.session_state.mode == "lookup" else "secondary"):
+        st.session_state.mode = "lookup"
+        st.session_state.step = "idle"
+        st.rerun()
 
-mode_label = "Ophthalmology" if st.session_state.mode == "ophthalmology" else "Daily & Childcare"
 api_name = "GPT-4o" if _openai_client else ("Gemini" if _gemini_model else ("Groq" if _groq_client else "None"))
-st.markdown(f"<div style='text-align:center;color:#636e72;font-size:0.85rem;'>Mode: {mode_label} | AI: {api_name}</div>",
+st.markdown(f"<div style='text-align:center;color:#636e72;font-size:0.75rem;margin:4px 0;'>AI: {api_name}</div>",
             unsafe_allow_html=True)
 
 st.markdown("---")
 
-# Generate new prompt button
-if st.button("New Sentence", use_container_width=True, type="primary"):
-    with st.spinner("Generating..."):
-        st.session_state.current_prompt = generate_prompt(st.session_state.mode)
-        st.session_state.step = "prompt_shown"
-    st.rerun()
+# ─── Lookup Mode ───────────────────────────────────────────
 
-# Show current prompt
-if st.session_state.current_prompt:
-    st.markdown(f'<div class="prompt-box">{st.session_state.current_prompt}</div>',
-                unsafe_allow_html=True)
+if st.session_state.mode == "lookup":
+    st.markdown("### Expression Lookup")
+    lookup_input = st.text_area("日本語を入力:", key="lookup_input", height=80,
+                                placeholder="例: 経過観察する、所見を認める...")
+    if st.button("Search", use_container_width=True, type="primary"):
+        if lookup_input.strip():
+            with st.spinner("Searching..."):
+                lookup_result = _chat(LOOKUP_PROMPT.format(query=lookup_input.strip()))
+            st.markdown(f'<div class="feedback-box">{lookup_result}</div>',
+                        unsafe_allow_html=True)
 
-    # TTS button for prompt (read Japanese aloud)
-    st.html(f"""
-    <button onclick="
-        var u = new SpeechSynthesisUtterance('{st.session_state.current_prompt.replace("'", "\\'")}');
-        u.lang = 'ja-JP'; u.rate = 0.9;
-        speechSynthesis.speak(u);
-    " style="background:#6c5ce7;color:#fff;border:none;border-radius:8px;
-             padding:8px 20px;cursor:pointer;font-size:0.9rem;margin:4px 0;">
-        Read Aloud (Japanese)
-    </button>
-    """)
+# ─── Speaking Practice Mode ────────────────────────────────
+
+if st.session_state.mode in ("ophthalmology", "daily"):
+    if st.button("New Sentence", use_container_width=True, type="primary"):
+        with st.spinner("Generating..."):
+            st.session_state.current_prompt = generate_prompt(st.session_state.mode)
+            st.session_state.step = "prompt_shown"
+        st.rerun()
+
+    if st.session_state.current_prompt:
+        st.markdown(f'<div class="prompt-box">{st.session_state.current_prompt}</div>',
+                    unsafe_allow_html=True)
 
 # ─── Speech Recognition Component ──────────────────────────
 
-if st.session_state.current_prompt and st.session_state.step in ("prompt_shown", "waiting_speech"):
+if st.session_state.mode in ("ophthalmology", "daily") and st.session_state.current_prompt and st.session_state.step in ("prompt_shown", "waiting_speech"):
     st.markdown("### Speak your English translation")
     st.markdown("<p style='color:#b2bec3;font-size:0.85rem;'>Tap the mic, speak in English, then tap Stop and Submit. "
                 "Or type below.</p>",
