@@ -321,16 +321,11 @@ def speech_component(target_label, submit_btn_text="Send"):
             margin:10px 0;min-height:40px;color:#dfe6e9;
             font-size:1rem;text-align:left;
         "></div>
-        <button id="submit-btn" onclick="submitToStreamlit()" style="
-            display:none;background:#0984e3;color:#fff;border:none;
-            border-radius:8px;padding:10px 24px;font-size:1rem;
-            cursor:pointer;margin:8px;
-        ">Submit</button>
     </div>
     <script>
     var recognition=null, isListening=false, fullTranscript='', interimText='';
     function toggleMic(){{
-        if(isListening){{stopListening();}}else{{startListening();}}
+        if(isListening){{stopAndSubmit();}}else{{startListening();}}
     }}
     function startListening(){{
         var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -341,8 +336,7 @@ def speech_component(target_label, submit_btn_text="Send"):
             isListening=true;fullTranscript='';
             document.getElementById('mic-btn').style.background='#d63031';
             document.getElementById('mic-btn').innerHTML='&#x23F9;';
-            document.getElementById('status').textContent='Listening...';
-            document.getElementById('submit-btn').style.display='none';
+            document.getElementById('status').textContent='Listening... tap to stop';
         }};
         recognition.onresult=function(e){{
             interimText='';
@@ -366,19 +360,17 @@ def speech_component(target_label, submit_btn_text="Send"):
             document.getElementById('status').textContent='Error: '+ex.message;
         }}
     }}
-    function stopListening(){{
+    function stopAndSubmit(){{
         isListening=false;
         if(recognition)recognition.stop();
         document.getElementById('mic-btn').style.background='#e17055';
         document.getElementById('mic-btn').innerHTML='&#x1F3A4;';
-        document.getElementById('status').textContent='Tap Submit to send';
-        document.getElementById('submit-btn').style.display='inline-block';
-    }}
-    function submitToStreamlit(){{
         var text=fullTranscript.trim();
-        if(!text)return;
-        document.getElementById('status').textContent='Submitting...';
-        document.getElementById('submit-btn').style.display='none';
+        if(!text){{
+            document.getElementById('status').textContent='No speech detected. Tap to retry.';
+            return;
+        }}
+        document.getElementById('status').textContent='Sending...';
         var textareas=window.parent.document.querySelectorAll('textarea');
         for(var i=0;i<textareas.length;i++){{
             if(textareas[i].getAttribute('aria-label')==='{target_label}'){{
@@ -396,11 +388,11 @@ def speech_component(target_label, submit_btn_text="Send"):
                     buttons[i].click();break;
                 }}
             }}
-        }},300);
+        }},500);
     }}
     </script>
     """
-    components.html(html, height=220)
+    components.html(html, height=180)
 
 # ─── UI ─────────────────────────────────────────────────────
 
