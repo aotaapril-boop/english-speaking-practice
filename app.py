@@ -584,6 +584,7 @@ if st.session_state.mode in ("ophthalmology", "daily"):
                     reply = _chat(conv_history)
 
                 st.session_state.conv_messages.append({"role": "assistant", "content": reply})
+                del st.session_state["conv_input"]
                 st.rerun()
 
         # TTS for last AI message
