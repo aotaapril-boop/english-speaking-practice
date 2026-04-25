@@ -382,9 +382,19 @@ def speech_component(target_label, submit_btn_text="Send"):
             }}
         }}
         setTimeout(function(){{
-            var buttons=window.parent.document.querySelectorAll('button');
+            var doc=window.parent.document;
+            // Find button by searching for p tags with matching text inside buttons
+            var ps=doc.querySelectorAll('button p');
+            for(var i=0;i<ps.length;i++){{
+                if(ps[i].textContent.trim()==='{submit_btn_text}'){{
+                    ps[i].closest('button').click();
+                    return;
+                }}
+            }}
+            // Fallback: search all buttons by textContent
+            var buttons=doc.querySelectorAll('button');
             for(var i=0;i<buttons.length;i++){{
-                if(buttons[i].textContent.trim()==='{submit_btn_text}'){{
+                if(buttons[i].textContent.includes('{submit_btn_text}')){{
                     buttons[i].click();break;
                 }}
             }}
