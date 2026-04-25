@@ -2,22 +2,38 @@
 English Speaking Practice App
 - Two modes: Ophthalmology English / Daily & Childcare English
 - Web Speech API for STT (continuous, trigger-word stop) and TTS
-- Groq API (Llama) for cleansing + feedback
+- GPT-4o > Gemini > Groq fallback chain
 """
 
 import streamlit as st
 import streamlit.components.v1 as components
-from groq import Groq
 import json
 import random
 
 st.set_page_config(page_title="English Speaking Practice", layout="centered")
 
-# ─── Groq Setup ─────────────────────────────────────────────
+# ─── API Setup (GPT-4o → Gemini → Groq) ────────────────────
 
+OPENAI_API_KEY = st.secrets.get("openai_api_key", "")
+GEMINI_API_KEY = st.secrets.get("gemini_api_key", "")
 GROQ_API_KEY = st.secrets.get("groq_api_key", "")
-client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-MODEL = "llama-3.3-70b-versatile"
+
+_openai_client = None
+_gemini_model = None
+_groq_client = None
+
+if OPENAI_API_KEY:
+    from openai import OpenAI
+    _openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+if GEMINI_API_KEY:
+    import google.generativeai as genai
+    genai.configure(api_key=GEMINI_API_KEY)
+    _gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+
+if GROQ_API_KEY:
+    from groq import Groq
+    _groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ─── Mode & State ───────────────────────────────────────────
 
@@ -162,17 +178,36 @@ st.markdown("""
 # ─── Helper Functions ───────────────────────────────────────
 
 def _chat(message):
-    if not client:
-        return "API key not set. Add groq_api_key to Streamlit secrets."
-    try:
-        resp = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": message}],
-            temperature=0.7,
-        )
-        return resp.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Error: {e}"
+    # 1) GPT-4o
+    if _openai_client:
+        try:
+            resp = _openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": message}],
+                temperature=0.7,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception:
+            pass
+    # 2) Gemini
+    if _gemini_model:
+        try:
+            resp = _gemini_model.generate_content(message)
+            return resp.text.strip()
+        except Exception:
+            pass
+    # 3) Groq
+    if _groq_client:
+        try:
+            resp = _groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": message}],
+                temperature=0.7,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception as e:
+            return f"Error: {e}"
+    return "API key not set. Add openai_api_key, gemini_api_key, or groq_api_key to Streamlit secrets."
 
 def generate_prompt(mode):
     sys_prompt = _ophth_prompt() if mode == "ophthalmology" else SYSTEM_PROMPT_DAILY
@@ -220,7 +255,8 @@ with col2:
         st.rerun()
 
 mode_label = "Ophthalmology" if st.session_state.mode == "ophthalmology" else "Daily & Childcare"
-st.markdown(f"<div style='text-align:center;color:#636e72;font-size:0.85rem;'>Mode: {mode_label}</div>",
+api_name = "GPT-4o" if _openai_client else ("Gemini" if _gemini_model else ("Groq" if _groq_client else "None"))
+st.markdown(f"<div style='text-align:center;color:#636e72;font-size:0.85rem;'>Mode: {mode_label} | AI: {api_name}</div>",
             unsafe_allow_html=True)
 
 st.markdown("---")
