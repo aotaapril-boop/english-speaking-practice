@@ -144,17 +144,18 @@ SYSTEM_PROMPT_DAILY = """あなたは育児・日常英会話の英語教師で�
 - 出力前に、その文を実際に子どもや周りの人に言うか想像して、違和感がないか必ず確認してください
 - 日本語の文のみを出力してください。説明や英訳は不要です"""
 
-CLEANSE_PROMPT = """You are a speech-to-text post-processor. The user is practicing English speaking.
-The raw STT text below contains hesitations (um, ah, uh), false starts, and self-corrections.
+CLEANSE_PROMPT = """You are a minimal text cleaner for English practice input.
 
-Your task:
-1. Infer what the user INTENDED to say as a single natural English sentence
-2. Use context: the user was translating the Japanese prompt shown below
-3. Preserve medical/ophthalmology terms exactly (IRF, SRF, PED, ERM, VMT, etc.)
-4. Output ONLY the cleaned sentence, nothing else.
+IMPORTANT RULES:
+- Only fix obvious typos and remove filler words (um, uh, ah)
+- DO NOT rewrite, rephrase, or improve the sentence
+- DO NOT change word choice, grammar, or sentence structure
+- DO NOT use the Japanese prompt to guess what the user meant to say
+- Keep the user's exact words and grammar, even if wrong
+- Output ONLY the minimally cleaned sentence, nothing else
 
-Japanese prompt: {prompt}
-Raw STT text: {raw_text}"""
+Japanese prompt (for reference only — do NOT use it to change the user's words): {prompt}
+User input: {raw_text}"""
 
 FEEDBACK_PROMPT = """You are an expert English tutor. The user tried to translate this Japanese sentence into English.
 
@@ -492,7 +493,9 @@ if st.session_state.mode in ("ophthalmology", "daily"):
         fb = st.session_state.feedback_data
         gs = fb.get("grammar_score", 0)
         ns = fb.get("natural_score", 0)
+        raw = fb.get("raw", "")
         cleaned = fb.get("cleaned", "")
+        cleaned_note = f"<br><span style='color:#636e72;font-size:0.8rem;'>(typo-corrected: {cleaned})</span>" if cleaned != raw and raw else ""
 
         st.markdown(f"""
         <div class="feedback-box">
@@ -500,7 +503,7 @@ if st.session_state.mode in ("ophthalmology", "daily"):
                 <span class="score-badge {score_class(gs)}">Grammar: {gs}/5</span>
                 <span class="score-badge {score_class(ns)}">Naturalness: {ns}/5</span>
             </div>
-            <p><b>You said:</b> {cleaned}</p>
+            <p><b>You said:</b> {raw or cleaned}{cleaned_note}</p>
             <p style="color:#55efc4;"><b>Correction:</b> {fb.get('corrections', '')}</p>
             <p style="color:#ffeaa7;"><b>Why:</b> {fb.get('why_corrections', '')}</p>
             <p style="color:#a29bfe;"><b>Model answer:</b> {fb.get('model_answer', '')}</p>
