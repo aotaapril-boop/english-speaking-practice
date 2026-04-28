@@ -510,12 +510,12 @@ if st.session_state.mode in ("ophthalmology", "daily"):
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             })
 
-        _save_history_js()
         st.session_state.step = "feedback_shown"
         st.rerun()
 
     # ─── Show Feedback ─────────────────────────────────────
     if st.session_state.step in ("feedback_shown", "deep_dive", "conversation") and st.session_state.feedback_data:
+        _save_history_js()
         fb = st.session_state.feedback_data
         gs = fb.get("grammar_score", 0)
         ns = fb.get("natural_score", 0)
@@ -702,6 +702,8 @@ if st.session_state.mode in ("ophthalmology", "daily"):
 
 if st.session_state.mode == "history":
     st.markdown("### Practice History")
+    if st.session_state.history:
+        _save_history_js()
 
     if not st.session_state.history:
         st.markdown("<p style='color:#636e72;'>No history yet. Start practicing to build your history!</p>",
