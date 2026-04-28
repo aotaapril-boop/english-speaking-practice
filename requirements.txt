@@ -2,3 +2,4 @@ streamlit
 groq
 openai
 google-generativeai
+streamlit-js-eval

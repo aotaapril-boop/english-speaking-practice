@@ -1,14 +1,16 @@
 """
 English Speaking Practice App
-- Three modes: Ophthalmology / Daily & Childcare / Expression Lookup
+- Four modes: Ophthalmology / Daily & Childcare / Expression Lookup / History
 - Feedback flow: Correction → Deep Dive → Conversation
 - GPT-4o → Gemini → Groq fallback chain
+- History persisted via browser LocalStorage
 """
 
 import streamlit as st
 import json
 import random
 from datetime import datetime
+from streamlit_js_eval import streamlit_js_eval
 
 st.set_page_config(page_title="English Speaking Practice", layout="centered")
 
@@ -49,6 +51,43 @@ for key, default in [
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
+
+# ─── LocalStorage Persistence ──────────────────────────────
+
+def _save_history():
+    compact = []
+    for h in st.session_state.history[-50:]:
+        fb = h.get("feedback", {})
+        compact.append({
+            "prompt": h.get("prompt", ""),
+            "cleaned": h.get("cleaned", ""),
+            "mode": h.get("mode", ""),
+            "timestamp": h.get("timestamp", ""),
+            "feedback": {
+                "grammar_score": fb.get("grammar_score", 0),
+                "natural_score": fb.get("natural_score", 0),
+                "corrections": fb.get("corrections", ""),
+                "model_answer": fb.get("model_answer", ""),
+            }
+        })
+    data = json.dumps(compact, ensure_ascii=False)
+    escaped = data.replace("\\", "\\\\").replace("'", "\\'")
+    streamlit_js_eval(js_expressions=f"localStorage.setItem('esp_history', '{escaped}')", key=f"save_{len(compact)}")
+
+def _load_history():
+    if st.session_state.history_loaded:
+        return
+    st.session_state.history_loaded = True
+    raw = streamlit_js_eval(js_expressions="localStorage.getItem('esp_history')", key="load_hist")
+    if raw and isinstance(raw, str):
+        try:
+            loaded = json.loads(raw)
+            if loaded and not st.session_state.history:
+                st.session_state.history = loaded
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+_load_history()
 
 # ─── System Prompts ─────────────────────────────────────────
 
@@ -244,11 +283,6 @@ st.markdown("""
     padding: 0.6rem 1rem; margin: 0.3rem 0; color: #dfe6e9; text-align: right; }
 .conv-ai { background: #16213e; border-radius: 12px 12px 12px 4px;
     padding: 0.6rem 1rem; margin: 0.3rem 0; color: #fff; }
-.date-header {
-    color: #636e72; font-size: 0.8rem; font-weight: bold;
-    margin: 0.8rem 0 0.3rem 0; padding-bottom: 0.2rem;
-    border-bottom: 1px solid #2d3436;
-}
 
 header[data-testid="stHeader"] { display: none !important; }
 .stAppDeployButton { display: none !important; }
@@ -324,71 +358,6 @@ def score_class(score):
     if score >= 4: return "score-good"
     if score >= 3: return "score-ok"
     return "score-bad"
-
-def _save_history_js():
-    compact = []
-    for h in st.session_state.history[-50:]:
-        fb = h.get("feedback", {})
-        compact.append({
-            "prompt": h.get("prompt", ""),
-            "cleaned": h.get("cleaned", ""),
-            "mode": h.get("mode", ""),
-            "timestamp": h.get("timestamp", ""),
-            "feedback": {
-                "grammar_score": fb.get("grammar_score", 0),
-                "natural_score": fb.get("natural_score", 0),
-                "corrections": fb.get("corrections", ""),
-                "model_answer": fb.get("model_answer", ""),
-            }
-        })
-    data = json.dumps(compact, ensure_ascii=False)
-    escaped = data.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
-    st.html(f"""
-    <script>
-    try {{
-        localStorage.setItem('esp_history', `{escaped}`);
-    }} catch(e) {{}}
-    </script>
-    """)
-
-def _load_history_component():
-    st.html("""
-    <script>
-    try {
-        const data = localStorage.getItem('esp_history');
-        if (data) {
-            const parsed = JSON.parse(data);
-            if (parsed && parsed.length > 0) {
-                const recent = parsed.slice(-50);
-                const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(recent))));
-                if (encoded.length < 8000) {
-                    const params = new URLSearchParams(window.location.search);
-                    if (!params.has('h_loaded')) {
-                        params.set('h_loaded', '1');
-                        params.set('h_data', encoded);
-                        window.location.search = params.toString();
-                    }
-                }
-            }
-        }
-    } catch(e) {}
-    </script>
-    """)
-
-if not st.session_state.history_loaded:
-    st.session_state.history_loaded = True
-    params = st.query_params
-    if "h_data" in params:
-        try:
-            decoded = json.loads(
-                __import__('base64').b64decode(params["h_data"]).decode('utf-8')
-            )
-            if decoded and not st.session_state.history:
-                st.session_state.history = decoded
-        except Exception:
-            pass
-    else:
-        _load_history_component()
 
 
 # ─── UI ─────────────────────────────────────────────────────
@@ -509,13 +478,17 @@ if st.session_state.mode in ("ophthalmology", "daily"):
                 "feedback": feedback, "mode": st.session_state.mode,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             })
+            st.session_state._need_save = True
 
         st.session_state.step = "feedback_shown"
         st.rerun()
 
     # ─── Show Feedback ─────────────────────────────────────
     if st.session_state.step in ("feedback_shown", "deep_dive", "conversation") and st.session_state.feedback_data:
-        _save_history_js()
+        if st.session_state.get("_need_save"):
+            _save_history()
+            st.session_state._need_save = False
+
         fb = st.session_state.feedback_data
         gs = fb.get("grammar_score", 0)
         ns = fb.get("natural_score", 0)
@@ -702,8 +675,6 @@ if st.session_state.mode in ("ophthalmology", "daily"):
 
 if st.session_state.mode == "history":
     st.markdown("### Practice History")
-    if st.session_state.history:
-        _save_history_js()
 
     if not st.session_state.history:
         st.markdown("<p style='color:#636e72;'>No history yet. Start practicing to build your history!</p>",
@@ -733,9 +704,10 @@ if st.session_state.mode == "history":
             d = ts[:10] if ts else "Unknown"
             dates.setdefault(d, []).append(h)
 
-        for date_key in sorted(dates.keys(), reverse=True):
+        sorted_dates = sorted(dates.keys(), reverse=True)
+        for date_key in sorted_dates:
             entries = dates[date_key]
-            with st.expander(f"{date_key} ({len(entries)} sentences)", expanded=(date_key == sorted(dates.keys(), reverse=True)[0])):
+            with st.expander(f"{date_key} ({len(entries)} sentences)", expanded=(date_key == sorted_dates[0])):
                 for h in reversed(entries):
                     hfb = h.get("feedback", {})
                     ts = h.get("timestamp", "")
@@ -759,9 +731,5 @@ if st.session_state.mode == "history":
 
         if st.button("Clear All History", use_container_width=True, type="secondary"):
             st.session_state.history = []
-            st.html("""
-            <script>
-            try { localStorage.removeItem('esp_history'); } catch(e) {}
-            </script>
-            """)
+            streamlit_js_eval(js_expressions="localStorage.removeItem('esp_history')", key="clear_hist")
             st.rerun()
