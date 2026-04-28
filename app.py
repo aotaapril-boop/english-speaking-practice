@@ -8,6 +8,7 @@ English Speaking Practice App
 import streamlit as st
 import json
 import random
+from datetime import datetime
 
 st.set_page_config(page_title="English Speaking Practice", layout="centered")
 
@@ -204,7 +205,7 @@ LOOKUP_PROMPT = """あなたは日英翻訳の専門家です。以下の日本�
 
 st.markdown("""
 <style>
-.block-container { padding-top: 3rem; padding-bottom: 0; max-width: 700px; }
+.block-container { padding-top: 1rem; padding-bottom: 0; max-width: 700px; }
 .prompt-box {
     background: #1a1a2e; border: 2px solid #e94560;
     border-radius: 12px; padding: 1.2rem;
@@ -242,10 +243,23 @@ st.markdown("""
     padding: 0.6rem 1rem; margin: 0.3rem 0; color: #dfe6e9; text-align: right; }
 .conv-ai { background: #16213e; border-radius: 12px 12px 12px 4px;
     padding: 0.6rem 1rem; margin: 0.3rem 0; color: #fff; }
+.date-header {
+    color: #636e72; font-size: 0.8rem; font-weight: bold;
+    margin: 0.8rem 0 0.3rem 0; padding-bottom: 0.2rem;
+    border-bottom: 1px solid #2d3436;
+}
+
+header[data-testid="stHeader"] { display: none !important; }
+.stAppDeployButton { display: none !important; }
+div[data-testid="stDecoration"] { display: none !important; }
+div[data-testid="stToolbar"] { display: none !important; }
+iframe[title="streamlit_app_toolbar"] { display: none !important; }
+#stStreamlitMainMenu { display: none !important; }
 
 @media (max-width: 767px) {
-    .block-container { padding-top: 0.5rem; }
+    .block-container { padding-top: 0.2rem; }
     .prompt-box { font-size: 1.1rem; padding: 0.8rem; }
+    section[data-testid="stSidebar"] { display: none !important; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -420,6 +434,7 @@ if st.session_state.mode in ("ophthalmology", "daily"):
             st.session_state.history.append({
                 "prompt": prompt, "raw": raw, "cleaned": cleaned,
                 "feedback": feedback, "mode": st.session_state.mode,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             })
 
         st.session_state.step = "feedback_shown"
@@ -611,11 +626,20 @@ if st.session_state.mode in ("ophthalmology", "daily"):
 
 if st.session_state.history:
     with st.expander(f"History ({len(st.session_state.history)} sentences)"):
-        for i, h in enumerate(reversed(st.session_state.history)):
+        sorted_history = list(reversed(st.session_state.history))
+        current_date = None
+        for i, h in enumerate(sorted_history):
+            ts = h.get("timestamp", "")
+            entry_date = ts[:10] if ts else "Unknown"
+            if entry_date != current_date:
+                current_date = entry_date
+                st.markdown(f'<div class="date-header">{current_date}</div>', unsafe_allow_html=True)
             hfb = h.get("feedback", {})
+            idx = len(st.session_state.history) - i
+            time_str = ts[11:] if len(ts) > 11 else ""
             st.markdown(f"""
-            **#{len(st.session_state.history)-i}.** {h['prompt']}
+            **#{idx}.** {h['prompt']} <span style="color:#636e72;font-size:0.75rem;">{time_str}</span>
             - You said: _{h['cleaned']}_
             - Score: Grammar {hfb.get('grammar_score','-')}/5, Natural {hfb.get('natural_score','-')}/5
             - Model: {hfb.get('model_answer','')}
-            """)
+            """, unsafe_allow_html=True)
