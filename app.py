@@ -68,6 +68,7 @@ def _save_history():
                 "natural_score": fb.get("natural_score", 0),
                 "corrections": fb.get("corrections", ""),
                 "model_answer": fb.get("model_answer", ""),
+                "advanced_expression": fb.get("advanced_expression", ""),
             }
         })
     data = json.dumps(compact, ensure_ascii=False)
@@ -730,6 +731,7 @@ if st.session_state.mode == "history":
                             <span class="score-badge {score_class(ns)}" style="font-size:0.75rem;padding:2px 8px;">N:{ns}/5</span>
                         </div>
                         <div style="color:#55efc4;font-size:0.8rem;margin-top:4px;">Model: {hfb.get('model_answer','')}</div>
+                        {'<div style="color:#a29bfe;font-size:0.8rem;margin-top:2px;">Advanced: ' + hfb.get('advanced_expression','') + '</div>' if hfb.get('advanced_expression') else ''}
                     </div>""", unsafe_allow_html=True)
 
         if st.button("Clear All History", use_container_width=True, type="secondary"):
