@@ -45,6 +45,7 @@ for key, default in [
     ("feedback_data", None),
     ("deep_dive_result", None),
     ("conv_messages", []),
+    ("history_loaded", False),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -324,12 +325,77 @@ def score_class(score):
     if score >= 3: return "score-ok"
     return "score-bad"
 
+def _save_history_js():
+    compact = []
+    for h in st.session_state.history[-50:]:
+        fb = h.get("feedback", {})
+        compact.append({
+            "prompt": h.get("prompt", ""),
+            "cleaned": h.get("cleaned", ""),
+            "mode": h.get("mode", ""),
+            "timestamp": h.get("timestamp", ""),
+            "feedback": {
+                "grammar_score": fb.get("grammar_score", 0),
+                "natural_score": fb.get("natural_score", 0),
+                "corrections": fb.get("corrections", ""),
+                "model_answer": fb.get("model_answer", ""),
+            }
+        })
+    data = json.dumps(compact, ensure_ascii=False)
+    escaped = data.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+    st.html(f"""
+    <script>
+    try {{
+        localStorage.setItem('esp_history', `{escaped}`);
+    }} catch(e) {{}}
+    </script>
+    """)
+
+def _load_history_component():
+    st.html("""
+    <script>
+    try {
+        const data = localStorage.getItem('esp_history');
+        if (data) {
+            const parsed = JSON.parse(data);
+            if (parsed && parsed.length > 0) {
+                const recent = parsed.slice(-50);
+                const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(recent))));
+                if (encoded.length < 8000) {
+                    const params = new URLSearchParams(window.location.search);
+                    if (!params.has('h_loaded')) {
+                        params.set('h_loaded', '1');
+                        params.set('h_data', encoded);
+                        window.location.search = params.toString();
+                    }
+                }
+            }
+        }
+    } catch(e) {}
+    </script>
+    """)
+
+if not st.session_state.history_loaded:
+    st.session_state.history_loaded = True
+    params = st.query_params
+    if "h_data" in params:
+        try:
+            decoded = json.loads(
+                __import__('base64').b64decode(params["h_data"]).decode('utf-8')
+            )
+            if decoded and not st.session_state.history:
+                st.session_state.history = decoded
+        except Exception:
+            pass
+    else:
+        _load_history_component()
+
 
 # ─── UI ─────────────────────────────────────────────────────
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
-    if st.button("Ophthalmology", use_container_width=True,
+    if st.button("Ophth", use_container_width=True,
                  type="primary" if st.session_state.mode == "ophthalmology" else "secondary"):
         st.session_state.mode = "ophthalmology"
         st.session_state.step = "idle"
@@ -346,6 +412,13 @@ with col3:
     if st.button("Lookup", use_container_width=True,
                  type="primary" if st.session_state.mode == "lookup" else "secondary"):
         st.session_state.mode = "lookup"
+        st.session_state.step = "idle"
+        st.session_state.conv_messages = []
+        st.rerun()
+with col4:
+    if st.button("History", use_container_width=True,
+                 type="primary" if st.session_state.mode == "history" else "secondary"):
+        st.session_state.mode = "history"
         st.session_state.step = "idle"
         st.session_state.conv_messages = []
         st.rerun()
@@ -437,6 +510,7 @@ if st.session_state.mode in ("ophthalmology", "daily"):
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             })
 
+        _save_history_js()
         st.session_state.step = "feedback_shown"
         st.rerun()
 
@@ -622,24 +696,70 @@ if st.session_state.mode in ("ophthalmology", "daily"):
             </button>
             """)
 
-# ─── History ────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════
+# HISTORY MODE
+# ═══════════════════════════════════════════════════════════
 
-if st.session_state.history:
-    with st.expander(f"History ({len(st.session_state.history)} sentences)"):
-        sorted_history = list(reversed(st.session_state.history))
-        current_date = None
-        for i, h in enumerate(sorted_history):
+if st.session_state.mode == "history":
+    st.markdown("### Practice History")
+
+    if not st.session_state.history:
+        st.markdown("<p style='color:#636e72;'>No history yet. Start practicing to build your history!</p>",
+                    unsafe_allow_html=True)
+    else:
+        total = len(st.session_state.history)
+        avg_g = sum(h.get("feedback", {}).get("grammar_score", 0) for h in st.session_state.history) / total
+        avg_n = sum(h.get("feedback", {}).get("natural_score", 0) for h in st.session_state.history) / total
+        st.markdown(f"""<div style="display:flex;gap:12px;margin-bottom:12px;">
+            <div style="flex:1;background:#16213e;border-radius:8px;padding:10px;text-align:center;">
+                <div style="color:#636e72;font-size:0.75rem;">Total</div>
+                <div style="color:#fff;font-size:1.3rem;font-weight:bold;">{total}</div>
+            </div>
+            <div style="flex:1;background:#16213e;border-radius:8px;padding:10px;text-align:center;">
+                <div style="color:#636e72;font-size:0.75rem;">Avg Grammar</div>
+                <div style="color:#55efc4;font-size:1.3rem;font-weight:bold;">{avg_g:.1f}/5</div>
+            </div>
+            <div style="flex:1;background:#16213e;border-radius:8px;padding:10px;text-align:center;">
+                <div style="color:#636e72;font-size:0.75rem;">Avg Natural</div>
+                <div style="color:#a29bfe;font-size:1.3rem;font-weight:bold;">{avg_n:.1f}/5</div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        dates = {}
+        for h in st.session_state.history:
             ts = h.get("timestamp", "")
-            entry_date = ts[:10] if ts else "Unknown"
-            if entry_date != current_date:
-                current_date = entry_date
-                st.markdown(f'<div class="date-header">{current_date}</div>', unsafe_allow_html=True)
-            hfb = h.get("feedback", {})
-            idx = len(st.session_state.history) - i
-            time_str = ts[11:] if len(ts) > 11 else ""
-            st.markdown(f"""
-            **#{idx}.** {h['prompt']} <span style="color:#636e72;font-size:0.75rem;">{time_str}</span>
-            - You said: _{h['cleaned']}_
-            - Score: Grammar {hfb.get('grammar_score','-')}/5, Natural {hfb.get('natural_score','-')}/5
-            - Model: {hfb.get('model_answer','')}
-            """, unsafe_allow_html=True)
+            d = ts[:10] if ts else "Unknown"
+            dates.setdefault(d, []).append(h)
+
+        for date_key in sorted(dates.keys(), reverse=True):
+            entries = dates[date_key]
+            with st.expander(f"{date_key} ({len(entries)} sentences)", expanded=(date_key == sorted(dates.keys(), reverse=True)[0])):
+                for h in reversed(entries):
+                    hfb = h.get("feedback", {})
+                    ts = h.get("timestamp", "")
+                    time_str = ts[11:] if len(ts) > 11 else ""
+                    mode_label = "Ophth" if h.get("mode") == "ophthalmology" else "Daily"
+                    gs = hfb.get('grammar_score', 0)
+                    ns = hfb.get('natural_score', 0)
+                    st.markdown(f"""<div style="background:#16213e;border-radius:8px;padding:10px;margin:6px 0;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <span style="color:#e94560;font-size:0.75rem;font-weight:bold;">{mode_label}</span>
+                            <span style="color:#636e72;font-size:0.7rem;">{time_str}</span>
+                        </div>
+                        <div style="color:#fff;font-size:0.9rem;margin-bottom:6px;">{h.get('prompt','')}</div>
+                        <div style="color:#dfe6e9;font-size:0.85rem;font-style:italic;">You: {h.get('cleaned','')}</div>
+                        <div style="display:flex;gap:6px;margin-top:4px;">
+                            <span class="score-badge {score_class(gs)}" style="font-size:0.75rem;padding:2px 8px;">G:{gs}/5</span>
+                            <span class="score-badge {score_class(ns)}" style="font-size:0.75rem;padding:2px 8px;">N:{ns}/5</span>
+                        </div>
+                        <div style="color:#55efc4;font-size:0.8rem;margin-top:4px;">Model: {hfb.get('model_answer','')}</div>
+                    </div>""", unsafe_allow_html=True)
+
+        if st.button("Clear All History", use_container_width=True, type="secondary"):
+            st.session_state.history = []
+            st.html("""
+            <script>
+            try { localStorage.removeItem('esp_history'); } catch(e) {}
+            </script>
+            """)
+            st.rerun()
